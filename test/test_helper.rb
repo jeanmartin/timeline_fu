@@ -27,6 +27,12 @@ ActiveRecord::Schema.define(:version => 0) do
     t.integer :list_id, :author_id
     t.string  :body
   end
+  
+  create_table :timeline_events do |t|
+    t.string   :event_type, :subject_type,  :actor_type,  :secondary_subject_type
+    t.integer               :subject_id,    :actor_id,    :secondary_subject_id
+    t.timestamps
+  end
 end
 
 class Person < ActiveRecord::Base
@@ -37,6 +43,8 @@ class Person < ActiveRecord::Base
                           :if     => lambda { |person| !person.new_watcher.nil? }
   fires :person_updated,  :on     => :update,
                           :if     => :fire?
+
+  has_timeline :activity, :on => :all
 
   def fire?
     new_watcher.nil? && fire
@@ -49,6 +57,16 @@ class List < ActiveRecord::Base
   
   fires :list_created_or_updated,  :actor  => :author, 
                                    :on     => [:create, :update]
+                                   
+  has_timeline :simple_activity,  :as => [:subject, :secondary_subject],
+                                  :conditions => 'list.body.include? \'list\'',
+                                  :order => 'created_at DESC',
+                                  :dependent => :destroy
+
+  has_timeline :custom_activity,  :finder_sql => {:subject => '', :secondary_subject => ''},
+                                  :counter_sql => {:subject => '', :secondary_subject => ''},
+                                  :conditions => {:subject => '', :secondary_subject => ''},
+                                  :order => 'created_at ASC'
 end
 
 class Comment < ActiveRecord::Base
@@ -57,14 +75,22 @@ class Comment < ActiveRecord::Base
 
   fires :comment_created, :actor   => :author,
                           :on      => :create,
+                          :subject => :self,
                           :secondary_subject => :list
+  fires :list_updated,    :actor   => :author,
+                          :on      => :update,
+                          :subject => :list,
+                          :secondary_subject => :self
   fires :comment_deleted, :actor   => :author,
                           :on      => :destroy,
                           :subject => :list,
                           :secondary_subject => :self
+                          
+  has_timeline :activity, :as => :secondary_subject,
+                          :dependent => {:subject => :destroy}
 end
 
-TimelineEvent = Class.new
+TimelineEvent ||= Class.new
 
 class Test::Unit::TestCase
   protected

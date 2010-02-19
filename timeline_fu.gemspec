@@ -25,10 +25,12 @@ Gem::Specification.new do |s|
      "init.rb",
      "lib/timeline_fu.rb",
      "lib/timeline_fu/fires.rb",
+     "lib/timeline_fu/has_timeline.rb",
      "lib/timeline_fu/macros.rb",
      "lib/timeline_fu/matchers.rb",
      "shoulda_macros/timeline_fu_shoulda.rb",
      "test/fires_test.rb",
+     "test/has_timeline_test.rb",
      "test/test_helper.rb",
      "timeline_fu.gemspec"
   ]
@@ -40,6 +42,7 @@ Gem::Specification.new do |s|
   s.summary = %q{Easily build timelines, much like GitHub's news feed}
   s.test_files = [
     "test/fires_test.rb",
+    "test/has_timeline_test.rb",
      "test/test_helper.rb"
   ]
 
