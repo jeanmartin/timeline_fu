@@ -21,123 +21,90 @@ module TimelineFu
       
       def method_missing(method_id)    
         unless self.class.tl_scopes.nil?  
-          if self.class.tl_scopes.key?( method_id )
-            get_scoped_events(method_id)
+          base_scope = [self.class.name.tableize, method_id].join('_')
+        
+          if self.class.tl_scopes.key?( base_scope )
+            get_scoped_events(base_scope)
           else
             super
           end
         end
       end  
       
-      def get_scoped_events(association)
-        dynamic_scopes = self.class.tl_scopes[association].map do 
-          |as| self.class.generate_scope_name(association, as)
-        end
+      def get_scoped_events(base_scope)
         
-        scoped_tl = TimelineEvent.send( dynamic_scopes.join("_or_"), self.id )
-        
-        if self.class.tl_orders.key?( association ) && scoped_tl.condition?(self.class.tl_orders[association] )
-          return scoped_tl.send( self.class.tl_orders[association] )
+        # build the association from scopes
+        associated    = TimelineEvent.send  self.class.tl_scopes[base_scope].map{|s| [base_scope,s].join('_')}.join('_or_'), self.id
+        conditioned   = associated.send     [base_scope, self.class.tl_conditions[base_scope]].join('_')
+
+        if self.class.tl_orders[base_scope]
+          return        conditioned.send    self.class.tl_orders[base_scope]
         else
-          return scoped_tl
+          return conditioned
         end
       end      
     end
         
     module ClassMethods    
-      def has_timeline(name, opts)
+      def has_timeline(association_name, opts)
         opts.assert_valid_keys(
           :as,
+          :conditions,
           :order,
           :dependent
         )  
         
         initialize_variables if @tl_scopes.nil?
-        @tl_scopes[name]      = []
-        @tl_orders[name]      = opts[:order] if opts.key?( :order )
-        @tl_dependent[name]   = opts[:dependent]
+        scopes_base_name = [self.base_class.name.tableize, association_name].join('_')
+        @tl_scopes[scopes_base_name]      = []
+        @tl_conditions[scopes_base_name]  = []
+        @tl_orders[scopes_base_name]      = opts[:order] if opts.key?( :order )
+        @tl_dependent[association_name]   = opts[:dependent]
 
-        generate_scopes(name, opts[:as])
-      end
-
-      def generate_scope_name(association_name, as)
-        "#{self.base_class.name.tableize}_#{association_name}_as_#{as}"
+        case 
+          when opts[:as].kind_of?(Array) then generate_scopes_from_array( scopes_base_name, 
+                                                                        opts[:as] )
+          when opts[:as] == :all then generate_scopes_from_array( scopes_base_name, 
+                                                                        [:actor, :subject, :secondary_subject] )
+          when opts[:as].kind_of?(Symbol) then generate_scopes_from_symbol( scopes_base_name, 
+                                                                        opts[:as] )
+          else raise ArgumentError, "Argument :as not specified or incorrect type"
+        end
+        
+        inject_named_scope( scopes_base_name, 'conditions', {:conditions => opts[:conditions]}, @tl_conditions )
       end
             
       private
       
       def initialize_variables
         before_destroy :handle_dependent_timelines
-        class << self; attr_reader :tl_scopes, :tl_orders, :tl_dependent; end
+        class << self; attr_reader :tl_scopes, :tl_conditions, :tl_orders, :tl_dependent; end
         @tl_scopes          ||= {}
+        @tl_conditions      ||= {}
         @tl_orders          ||= {}
         @tl_dependent       ||= {}
       end      
       
-      def generate_scopes(name, as)
-        case 
-          when as.kind_of?(Hash) then
-            [:actor, :subject, :secondary_subject].each do |a|
-              if (as.key? a)
-                generate_as_scope(name, a, as[a]) 
-                @tl_scopes[name] << a
-              end
-            end
-            
-          when as.kind_of?(Array) then
-            [:actor, :subject, :secondary_subject].each do |a|
-              if (as.include? a)
-                generate_as_scope(name, a)
-                @tl_scopes[name] << a
-              end
-            end       
-               
-          when as == :all then
-            [:actor, :subject, :secondary_subject].each do |a|
-              generate_as_scope(name, a)
-              @tl_scopes[name] << a
-            end
-            
-          when [:actor, :subject, :secondary_subject].include?(as) then
-            generate_as_scope(name, as)
-            @tl_scopes[name] << as
-          else raise ArgumentError, "Argument :as is mandatory and must be one of [:actor | :subject | :secondary_subject]"
-        end      
+      def generate_scopes_from_array(base_name, array)
+        array.each do |symbol|
+          generate_scopes_from_symbol( base_name, symbol )
+        end
       end
       
-      def generate_as_scope(association_name, as, conditions = nil)
-        class_name = self.base_class.name
-        as_id = "#{as}_id"
-        as_type = "#{as}_type"
-        scope_name = generate_scope_name(association_name, as)
+      def generate_scopes_from_symbol(base_name, symbol)
+        scope_name = [symbol, 'scope'].join('_')
+        inject_named_scope( base_name, scope_name, 
+                          lambda { |*associated_id| { :conditions => 
+                          { "#{symbol}_id".to_sym => associated_id.first, 
+                          "#{symbol}_type".to_sym => self.base_class.name } } } )
+      end
+      
+      def inject_named_scope( base_name, scope_name, conditions, i_var = @tl_scopes )
+        TimelineEvent.class_eval do
+          named_scope [base_name,scope_name].join('_'), conditions
+        end
 
-        case
-          when conditions.kind_of?(Hash) || conditions.nil? then  
-            TimelineEvent.class_eval do
-              named_scope scope_name, lambda { |*associated_id| 
-                conditions_hash = { as_id.to_sym => associated_id.first, as_type.to_sym => class_name }
-                conditions_hash.merge!( conditions ) unless conditions.nil?
-                { :conditions => conditions_hash }
-              }
-            end
-            
-          when conditions.kind_of?(Array) then
-            TimelineEvent.class_eval do
-              named_scope scope_name, lambda { |*associated| 
-                condition_string = "#{as_id} = ? AND #{as_type} = ? AND " + conditions[0]
-                condition_values = [associated_id.first, class_name] + conditions[1..conditions.count]
-                { :conditions => [condition_string] + condition_values }
-              }
-            end  
-            
-          when conditions.kind_of?(String) then
-            TimelineEvent.class_eval do
-              named_scope scope_name, lambda { |*associated|
-                condition_string = [as_id+' == '+associated_id.first+' AND '+as_type+' == '+class_name,conditions].join(' AND ')                        
-                { :conditions => condition_string }
-              }
-            end  
-        end              
+        i_var[base_name] << scope_name
       end
     end
   end

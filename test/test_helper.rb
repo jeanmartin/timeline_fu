@@ -47,7 +47,7 @@ class Person < ActiveRecord::Base
 
   has_timeline :activity, :as => :all
   
-  has_timeline :comment_activity, :as => {:actor => {:subject_type => 'Comment'} }
+  has_timeline :comment_activity, :as => :actor, :conditions => {:subject_type => 'Comment'}
 
   def fire?
     new_watcher.nil? && fire
