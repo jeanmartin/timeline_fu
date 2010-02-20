@@ -16,9 +16,9 @@ module TimelineFu
 
         opts[:subject] = :self unless opts.has_key?(:subject)
 
-        case opts[:on]
+        case opts[:on].to_s
           when /(.+)_(.+)/  then order = $1; event = $2;
-          else order = 'after'; event = opts[:on];
+          else order = 'after'; event = opts[:on].to_s;
         end
           
         method_name = :"fire_#{event_type}_#{order}_#{event}"
