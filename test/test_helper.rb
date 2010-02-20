@@ -1,8 +1,9 @@
 require 'rubygems'
-require 'activerecord'
+require 'active_record'
 require 'mocha'
 require 'test/unit'
 require 'logger'
+require 'searchlogic'
 
 require File.dirname(__FILE__)+'/../lib/timeline_fu'
 
@@ -44,7 +45,9 @@ class Person < ActiveRecord::Base
   fires :person_updated,  :on     => :update,
                           :if     => :fire?
 
-  has_timeline :activity, :on => :all
+  has_timeline :activity, :as => :all
+  
+  has_timeline :comment_activity, :as => {:actor => {:subject_type => 'Comment'} }
 
   def fire?
     new_watcher.nil? && fire
@@ -55,18 +58,13 @@ class List < ActiveRecord::Base
   belongs_to :author, :class_name => "Person"
   has_many :comments
   
-  fires :list_created_or_updated,  :actor  => :author, 
-                                   :on     => [:create, :update]
+  fires :list_created_or_updated, :actor  => :author, 
+                                  :on     => [:create, :update],
+                                  :subject => :self
                                    
-  has_timeline :simple_activity,  :as => [:subject, :secondary_subject],
-                                  :conditions => 'list.body.include? \'list\'',
-                                  :order => 'created_at DESC',
+  has_timeline :activity,  :as => [:subject, :secondary_subject],
+                                  :order => 'descend_by_subject_id',
                                   :dependent => :destroy
-
-  has_timeline :custom_activity,  :finder_sql => {:subject => '', :secondary_subject => ''},
-                                  :counter_sql => {:subject => '', :secondary_subject => ''},
-                                  :conditions => {:subject => '', :secondary_subject => ''},
-                                  :order => 'created_at ASC'
 end
 
 class Comment < ActiveRecord::Base
@@ -86,8 +84,7 @@ class Comment < ActiveRecord::Base
                           :subject => :list,
                           :secondary_subject => :self
                           
-  has_timeline :activity, :as => :secondary_subject,
-                          :dependent => {:subject => :destroy}
+  has_timeline :activity, :as => :secondary_subject
 end
 
 TimelineEvent ||= Class.new

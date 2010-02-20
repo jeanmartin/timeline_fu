@@ -1,5 +1,5 @@
 require 'rubygems'
-require 'activerecord'
+require 'active_record'
 require File.dirname(__FILE__)+'/../generators/timeline_fu/templates/model'
 require File.dirname(__FILE__)+'/test_helper'
 require 'shoulda'
@@ -19,42 +19,27 @@ class HasTimelineTest < Test::Unit::TestCase
       @comment3.save
     end
     
-    should 'include simply defined events' do
+    should 'include events' do
       @comment2.body = 'YET another cool list!'
       @comment2.save
-      assert @list.simple_activity.map(&:subject).include? @comment1
-      assert @list.simple_activity.map(&:secondary_subject).include? @comment2
+      
+      assert @list.activity.all.map(&:subject).include? @comment1
+      assert @list.activity.all.map(&:secondary_subject).include? @comment2
     end
 
-    should_eventually 'generate from :all' do
+    should 'generate from :all' do
       assert @james.activity.map(&:subject).include? @comment1
     end
+    
+    should "filter on condition" do
+      assert @james.activity.map(&:subject).include? @list
+      assert !( @james.comment_activity.map(&:subject).include? @list )
+      assert @james.comment_activity.map(&:subject).include? @comment1
+    end
 
-    should_eventually "include events from custom finder" do
-      @comment2.body = 'YET another cool list!'
-      @comment2.save
-      assert @list.custom_activity.map(&:subject).include? @comment1
-      assert @list.custom_activity.map(&:secondary_subject).include? @comment2
-    end
-    
-    should_eventually "count from custom counter" do
-      assert_equal 2, @list.custom_activity.count
-    end
-    
-    should_eventually "filter on condition" do
-      assert !( @list.simple_activity.map(&:subject).include? @comment3)
-    end
-    
-    should_eventually "filter on multiple conditions" do
-      @comment3.body = 'still not using the l-word'
-      @comment3.save
-      assert !(@list.custom_activity.map(&:subject).include? @comment3)
-      assert @list.custom_activity.map(&:secondary_subject).include? @comment3
-    end
-    
-    should_eventually "respect order" do
-      assert @list.simple_activity.first.subject == @comment1
-      assert @list.custom_activity.first.subject == @comment2
+    should "respect order" do
+      assert_equal @list, @list.activity.last.subject
+      assert_equal @comment3, @list.activity.first.subject
     end
     
     context "after a list is destroyed" do
@@ -62,16 +47,7 @@ class HasTimelineTest < Test::Unit::TestCase
         @list.destroy
       end
       
-      #should_change "TimelineEvent.count", :by => -2
-    end
-    
-    context "after a comment is destroyed" do
-      setup do
-        @comment2.destroy
-      end
-      
-      # Should destroy dependent update event and create a new deleted event
-      #should_change "TimelineEvent.count", :by => 0
+      should_change( "the number of events", :by => -4 ) { TimelineEvent.count } 
     end
   end
 end
