@@ -19,6 +19,10 @@ class HasTimelineTest < Test::Unit::TestCase
       @comment3.save
     end
     
+    # NOTE: potential extension - add functins to restrice to actor,subject or secondary_subject
+    # could be implemented in the method_missing function
+    # ie, given an association foo, check for foo_as_actor, foo_as_subject, etc
+    
     should 'include events' do
       @comment2.body = 'YET another cool list!'
       @comment2.save
