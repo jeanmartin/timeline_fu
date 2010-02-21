@@ -42,14 +42,9 @@ module TimelineFu
         
         send :define_method, association_name do
           # build the association from scopes
-          associated    = TimelineEvent.send  tl_scopes.map{|s| [scopes_base_name,s].join('_')}.join('_or_'), self.id
-          conditioned   = associated.send     [scopes_base_name, tl_conditions].join('_')
-
-          if opts.key?( :order )
-            return        conditioned.send    opts[:order]
-          else
-            return conditioned
-          end
+          [ [scopes_base_name, tl_conditions].join('_'), opts[:order] ].inject( 
+            TimelineEvent.send( tl_scopes.map{|s| [scopes_base_name,s].join('_')}.join('_or_'), self.id ) 
+          ) {|memo, obj| obj ? memo.send( obj ) : memo }
         end    
         
         before_destroy lambda { |object| object.send :handle_dependent_timelines, association_name, opts[:dependent] }
