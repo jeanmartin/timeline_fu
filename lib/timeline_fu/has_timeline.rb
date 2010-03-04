@@ -61,9 +61,12 @@ module TimelineFu
       def generate_scopes_from_symbol(base_name, symbol)
         scope_name = [symbol, 'scope'].join('_')
         inject_named_scope( base_name, scope_name, 
-                          lambda { |*associated_id| { :conditions => 
-                          { "#{symbol}_id".to_sym => associated_id.first, 
-                          "#{symbol}_type".to_sym => self.base_class.name } } } )
+                          lambda { |*associated_id| { 
+                            :conditions => 
+                              { "#{symbol}_id".to_sym => associated_id.first, 
+                              "#{symbol}_type".to_sym => self.base_class.name },
+                            :order => 'created_at DESC' 
+                          } } )
       end
       
       def inject_named_scope( base_name, scope_name, conditions )
