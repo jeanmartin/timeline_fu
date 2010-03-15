@@ -16,23 +16,32 @@ module TimelineFu
 
         opts[:subject] = :self unless opts.has_key?(:subject)
 
-        method_name = :"fire_#{event_type}_after_#{opts[:on]}"
+        on = opts.delete(:on)
+        _if = opts.delete(:if)
+        _unless = opts.delete(:unless)
+
+        method_name = :"fire_#{event_type}_after_#{on}"
         define_method(method_name) do
-          create_options = [:actor, :subject, :secondary_subject].inject({}) do |memo, sym|
+          create_options = opts.keys.inject({}) do |memo, sym|
             case opts[sym]
             when :self
               memo[sym] = self
             else
-              memo[sym] = send(opts[sym]) if opts[sym]
+              memo[sym] = (respond_to?(opts[sym]) ? send(opts[sym]) : opts[sym].to_s) if opts[sym]
             end
             memo
           end
-          create_options[:event_type] = event_type.to_s
+          create_options[:event_type] = (respond_to?(event_type) ? send(event_type) : event_type.to_s)
+
+          # Cache actor/subjects
+          create_options[:actor_data] = create_options[:actor].to_yaml unless create_options[:actor].blank?
+          create_options[:subject_data] = create_options[:subject].to_yaml unless create_options[:subject].blank?
+          create_options[:secondary_subject_data] = create_options[:secondary_subject].to_yaml unless create_options[:secondary_subject].blank?
 
           TimelineEvent.create!(create_options)
         end
 
-        send(:"after_#{opts[:on]}", method_name, :if => opts[:if])
+        send(:"after_#{on}", method_name, :if => _if, :unless => _unless)
       end
     end
   end
