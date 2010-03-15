@@ -1,8 +1,9 @@
 require 'rubygems'
-require 'activerecord'
+require 'active_record'
 require 'mocha'
 require 'test/unit'
 require 'logger'
+require 'searchlogic'
 
 require File.dirname(__FILE__)+'/../lib/timeline_fu'
 
@@ -27,6 +28,12 @@ ActiveRecord::Schema.define(:version => 0) do
     t.integer :list_id, :author_id
     t.string  :body
   end
+  
+  create_table :timeline_events do |t|
+    t.string   :event_type, :subject_type,  :actor_type,  :secondary_subject_type
+    t.integer               :subject_id,    :actor_id,    :secondary_subject_id
+    t.timestamps
+  end
 end
 
 class Person < ActiveRecord::Base
@@ -38,6 +45,10 @@ class Person < ActiveRecord::Base
   fires :person_updated,  :on     => :update,
                           :if     => :fire?
 
+  has_timeline :activity, :as => :all
+  
+  has_timeline :comment_activity, :as => :actor, :conditions => {:subject_type => 'Comment'}
+
   def fire?
     new_watcher.nil? && fire
   end
@@ -47,8 +58,13 @@ class List < ActiveRecord::Base
   belongs_to :author, :class_name => "Person"
   has_many :comments
   
-  fires :list_created_or_updated,  :actor  => :author, 
-                                   :on     => [:create, :update]
+  fires :list_created_or_updated, :actor  => :author, 
+                                  :on     => [:create, :update],
+                                  :subject => :self
+                                   
+  has_timeline :activity,  :as => [:subject, :secondary_subject],
+                                  :order => 'descend_by_subject_id',
+                                  :dependent => :destroy
 end
 
 class Comment < ActiveRecord::Base
@@ -57,14 +73,21 @@ class Comment < ActiveRecord::Base
 
   fires :comment_created, :actor   => :author,
                           :on      => :create,
+                          :subject => :self,
                           :secondary_subject => :list
+  fires :list_updated,    :actor   => :author,
+                          :on      => :update,
+                          :subject => :list,
+                          :secondary_subject => :self
   fires :comment_deleted, :actor   => :author,
                           :on      => :destroy,
                           :subject => :list,
                           :secondary_subject => :self
+                          
+  has_timeline :activity, :as => :secondary_subject
 end
 
-TimelineEvent = Class.new
+TimelineEvent ||= Class.new
 
 class Test::Unit::TestCase
   protected

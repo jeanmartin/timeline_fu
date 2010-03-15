@@ -3,8 +3,15 @@ module TimelineFu
     def self.included(klass)
       klass.send(:extend, ClassMethods)
     end
-
+    
     module ClassMethods
+      def fire(event_type, opts)
+        opts[:subject] = :self unless opts.has_key?(:subject)
+        opts[:event_type] = event_type.to_s
+        
+        TimelineEvent.create!(opts)
+      end
+      
       def fires(event_type, opts)
         raise ArgumentError, "Argument :on is mandatory" unless opts.has_key?(:on)
 
@@ -20,7 +27,12 @@ module TimelineFu
         _if = opts.delete(:if)
         _unless = opts.delete(:unless)
 
-        method_name = :"fire_#{event_type}_after_#{on}"
+        case on
+          when /(.+)_(.+)/  then order = $1; event = $2;
+          else order = 'after'; event = on;
+        end
+
+        method_name = :"fire_#{event_type}_#{order}_#{event}"
         define_method(method_name) do
           create_options = opts.keys.inject({}) do |memo, sym|
             case opts[sym]
@@ -41,7 +53,7 @@ module TimelineFu
           TimelineEvent.create!(create_options)
         end
 
-        send(:"after_#{on}", method_name, :if => _if, :unless => _unless)
+        send(:"#{order}_#{event}", method_name, :if => _if, :unless => _unless)
       end
     end
   end
