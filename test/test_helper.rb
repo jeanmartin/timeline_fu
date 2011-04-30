@@ -1,11 +1,12 @@
 require 'rubygems'
-require 'active_record'
-require 'mocha'
 require 'test/unit'
+require 'mocha'
+require 'active_record'
 require 'logger'
-require 'searchlogic'
 
 require File.dirname(__FILE__)+'/../lib/timeline_fu'
+
+puts "Testing against version #{ActiveRecord::VERSION::STRING}"
 
 ActiveRecord::Base.configurations = {'sqlite3' => {:adapter => 'sqlite3', :database => ':memory:'}}
 ActiveRecord::Base.establish_connection('sqlite3')
@@ -32,9 +33,18 @@ ActiveRecord::Schema.define(:version => 0) do
   create_table :timeline_events do |t|
     t.string   :event_type, :subject_type,  :actor_type,  :secondary_subject_type
     t.integer               :subject_id,    :actor_id,    :secondary_subject_id
+    t.text                  :subject_data,  :actor_data,  :secondary_subject_data
     t.timestamps
   end
 end
+
+class TimelineEvent < ActiveRecord::Base
+  belongs_to :actor,              :polymorphic => true
+  belongs_to :subject,            :polymorphic => true
+  belongs_to :secondary_subject,  :polymorphic => true
+end
+
+
 
 class Person < ActiveRecord::Base
   attr_accessor :new_watcher, :fire
@@ -44,10 +54,6 @@ class Person < ActiveRecord::Base
                           :if     => lambda { |person| !person.new_watcher.nil? }
   fires :person_updated,  :on     => :update,
                           :if     => :fire?
-
-  has_timeline :activity, :as => :all
-  
-  has_timeline :comment_activity, :as => :actor, :conditions => {:subject_type => 'Comment'}
 
   def fire?
     new_watcher.nil? && fire
@@ -61,10 +67,6 @@ class List < ActiveRecord::Base
   fires :list_created_or_updated, :actor  => :author, 
                                   :on     => [:create, :update],
                                   :subject => :self
-                                   
-  has_timeline :activity,  :as => [:subject, :secondary_subject],
-                                  :order => 'descend_by_subject_id',
-                                  :dependent => :destroy
 end
 
 class Comment < ActiveRecord::Base
@@ -83,11 +85,7 @@ class Comment < ActiveRecord::Base
                           :on      => :destroy,
                           :subject => :list,
                           :secondary_subject => :self
-                          
-  has_timeline :activity, :as => :secondary_subject
 end
-
-TimelineEvent ||= Class.new
 
 class Test::Unit::TestCase
   protected

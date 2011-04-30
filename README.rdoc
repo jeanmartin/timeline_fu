@@ -1,6 +1,7 @@
 = TimelineFu
 
 Easily build timelines, much like GitHub's news feed.
+Rails 3 ready.
 
 == Usage
 
