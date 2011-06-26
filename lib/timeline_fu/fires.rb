@@ -46,9 +46,12 @@ module TimelineFu
           create_options[:event_type] = (respond_to?(event_type) ? send(event_type) : event_type.to_s)
 
           # Cache actor/subjects
-          create_options[:actor_data] = create_options[:actor].to_yaml unless create_options[:actor].blank?
-          create_options[:subject_data] = create_options[:subject].to_yaml unless create_options[:subject].blank?
-          create_options[:secondary_subject_data] = create_options[:secondary_subject].to_yaml unless create_options[:secondary_subject].blank?
+          
+          create_options[:actor_data] = create_options[:actor].to_yaml rescue nil unless create_options[:actor].blank?
+          create_options[:subject_data] = create_options[:subject].to_yaml rescue nil unless create_options[:subject].blank?
+          create_options[:secondary_subject_data] = create_options[:secondary_subject].to_yaml rescue nil unless create_options[:secondary_subject].blank?
+
+          create_options[:subject] = nil if create_options[:subject].present? && create_options[:subject].new_record?
 
           TimelineEvent.create!(create_options)
         end
